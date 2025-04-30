@@ -27,13 +27,14 @@ class IndicatorView: RefreshView {
         return layer
     }()
 
-    let indicator = UIActivityIndicatorView(style: .gray)
+    let indicator = UIActivityIndicatorView(style: .medium)
 
     private let isHeader: Bool
 
     init(isHeader: Bool, height: CGFloat, action: @escaping () -> Void) {
         self.isHeader = isHeader
         super.init(style: isHeader ? .header : .footer, height: height, action: action)
+        indicator.color = .white
         layer.addSublayer(arrowLayer)
         addSubview(indicator)
     }
@@ -45,22 +46,23 @@ class IndicatorView: RefreshView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
-        arrowLayer.position = center
+//        arrowLayer.position = center
         indicator.center = center
     }
 
     override func didUpdateState(_ isRefreshing: Bool) {
-        arrowLayer.isHidden = isRefreshing
+//        arrowLayer.isHidden = isRefreshing
         isRefreshing ? indicator.startAnimating() : indicator.stopAnimating()
     }
 
     override func didUpdateProgress(_ progress: CGFloat) {
-        let rotation = CATransform3DMakeRotation(CGFloat.pi, 0, 0, 1)
-        if isHeader {
-            arrowLayer.transform = progress == 1 ? rotation : CATransform3DIdentity
-        } else {
-            arrowLayer.transform = progress == 1 ? CATransform3DIdentity : rotation
-        }
+//        let rotation = CATransform3DMakeRotation(CGFloat.pi, 0, 0, 1)
+//        if isHeader {
+//            arrowLayer.transform = progress == 1 ? rotation : CATransform3DIdentity
+//        } else {
+//            arrowLayer.transform = progress == 1 ? CATransform3DIdentity : rotation
+//        }
+        indicator.startAnimating()
     }
 
 }

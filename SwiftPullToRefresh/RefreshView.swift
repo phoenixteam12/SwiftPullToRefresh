@@ -31,9 +31,12 @@ open class RefreshView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private var isRefreshing = false {
+    public var isRefreshing = false {
         didSet { didUpdateState(isRefreshing) }
     }
+    
+    // 是否正在停止刷新，避免连续重复产生问题
+    public var isStoping = false
 
     private var progress: CGFloat = 0 {
         didSet { didUpdateProgress(progress) }
@@ -51,8 +54,6 @@ open class RefreshView: UIView {
         return superview as? UIScrollView
     }
 
-    private var offsetToken: NSKeyValueObservation?
-    private var stateToken: NSKeyValueObservation?
     private var sizeToken: NSKeyValueObservation?
 
     open override func willMove(toWindow newWindow: UIWindow?) {
@@ -65,7 +66,7 @@ open class RefreshView: UIView {
     }
 
     open override func willMove(toSuperview newSuperview: UIView?) {
-        guard let scrollView = newSuperview as? UIScrollView, window != nil else {
+        guard let scrollView = newSuperview as? UIScrollView else { // , 去除 window != nil (解决spr_resetNoMoreData不生效）
             clearObserver()
             return
         }
@@ -73,13 +74,7 @@ open class RefreshView: UIView {
     }
 
     private func setupObserver(_ scrollView: UIScrollView) {
-        offsetToken = scrollView.observe(\.contentOffset) { [weak self] scrollView, _ in
-            self?.scrollViewDidScroll(scrollView)
-        }
-        stateToken = scrollView.observe(\.panGestureRecognizer.state) { [weak self] scrollView, _ in
-            guard scrollView.panGestureRecognizer.state == .ended else { return }
-            self?.scrollViewDidEndDragging(scrollView)
-        }
+        
         if style == .header {
             frame = CGRect(x: 0, y: -height, width: scrollView.bounds.width, height: height)
         } else {
@@ -91,13 +86,13 @@ open class RefreshView: UIView {
     }
 
     private func clearObserver() {
-        offsetToken?.invalidate()
-        stateToken?.invalidate()
         sizeToken?.invalidate()
     }
 
-    private func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        if isRefreshing { return }
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if isRefreshing {
+            return
+        }
 
         switch style {
         case .header:
@@ -113,7 +108,7 @@ open class RefreshView: UIView {
         }
     }
 
-    private func scrollViewDidEndDragging(_ scrollView: UIScrollView) {
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView) {
         if isRefreshing || progress < 1 || style == .autoFooter { return }
         beginRefreshing()
     }
@@ -124,27 +119,55 @@ open class RefreshView: UIView {
         progress = 1
         isRefreshing = true
         DispatchQueue.main.async {
-            UIView.animate(withDuration: 0.3, animations: {
-                switch self.style {
-                case .header:
+            
+            switch self.style {
+            case .header:
+                UIView.animate(withDuration: 0.3, animations: {
                     scrollView.contentOffset.y = -self.height - scrollView.contentInsetTop
                     scrollView.contentInset.top += self.height
-                case .footer:
+                }, completion: { _ in
+                    self.action()
+                })
+                
+            case .footer:
+                UIView.animate(withDuration: 0.3, animations: {
                     scrollView.contentInset.bottom += self.height
-                case .autoFooter:
-                    scrollView.contentOffset.y = self.height + scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInsetBottom
-                    scrollView.contentInset.bottom += self.height
-                }
-            }, completion: { _ in
+                }, completion: { _ in
+                    self.action()
+                })
+                
+            case .autoFooter:
+                scrollView.contentOffset.y = self.height + scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInsetBottom
+                scrollView.contentInset.bottom += self.height
                 self.action()
-            })
+            }
+            
+//            UIView.animate(withDuration: 0.3, animations: {
+//                switch self.style {
+//                case .header:
+//                    scrollView.contentOffset.y = -self.height - scrollView.contentInsetTop
+//                    scrollView.contentInset.top += self.height
+//                case .footer:
+//                    scrollView.contentInset.bottom += self.height
+//                case .autoFooter:
+//                    scrollView.contentOffset.y = self.height + scrollView.contentSize.height - scrollView.bounds.height + scrollView.contentInsetBottom
+//                    scrollView.contentInset.bottom += self.height
+//                }
+//            }, completion: { _ in
+//                self.action()
+//            })
         }
     }
 
     func endRefreshing(completion: (() -> Void)? = nil) {
-        guard let scrollView = scrollView else { return }
+        guard let scrollView = scrollView else {completion?(); return }
         guard isRefreshing else { completion?(); return }
-
+        guard !isStoping else {
+            completion?()
+            return
+        }
+        isStoping = true
+        
         DispatchQueue.main.async {
             UIView.animate(withDuration: 0.3, animations: {
                 switch self.style {
@@ -156,6 +179,7 @@ open class RefreshView: UIView {
             }, completion: { _ in
                 self.isRefreshing = false
                 self.progress = 0
+                self.isStoping = false
                 completion?()
             })
         }
@@ -166,7 +190,8 @@ open class RefreshView: UIView {
 private extension UIScrollView {
     var contentInsetTop: CGFloat {
         if #available(iOS 11.0, *) {
-            return contentInset.top + adjustedContentInset.top
+            return adjustedContentInset.top
+            //return contentInset.top + adjustedContentInset.top
         } else {
             return contentInset.top
         }
@@ -174,7 +199,8 @@ private extension UIScrollView {
 
     var contentInsetBottom: CGFloat {
         if #available(iOS 11.0, *) {
-            return contentInset.bottom + adjustedContentInset.bottom
+            return adjustedContentInset.bottom
+            //return contentInset.bottom + adjustedContentInset.bottom
         } else {
             return contentInset.bottom
         }

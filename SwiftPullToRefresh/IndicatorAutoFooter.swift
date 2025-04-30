@@ -10,10 +10,18 @@ import UIKit
 
 class IndicatorAutoFooter: RefreshView {
 
-    let indicator = UIActivityIndicatorView(style: .gray)
+    lazy var indicator : UIActivityIndicatorView = {
+        
+        if #available(iOS 13.0, *) {
+            return UIActivityIndicatorView(style: .medium)
+        } else {
+            return UIActivityIndicatorView(style: .gray)
+        }
+    }()
 
     init(height: CGFloat, action: @escaping () -> Void) {
         super.init(style: .autoFooter, height: height, action: action)
+        indicator.color = .white
         addSubview(indicator)
     }
 
